@@ -1,0 +1,332 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 230 33% 3%;
+    --foreground: 0 0% 98%;
+    --card: 230 33% 5%;
+    --card-foreground: 0 0% 98%;
+    --popover: 230 33% 5%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 187 85% 53%;
+    --primary-foreground: 230 33% 3%;
+    --secondary: 230 20% 12%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 230 20% 15%;
+    --muted-foreground: 220 20% 70%;
+    --accent: 187 85% 53%;
+    --accent-foreground: 230 33% 3%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 230 20% 15%;
+    --input: 230 20% 15%;
+    --ring: 187 85% 53%;
+    --radius: 0.75rem;
+    
+    /* JeevanChain Custom Colors */
+    --void-black: #07070B;
+    --void-dark: #0E0E14;
+    --neon-cyan: #22D3EE;
+    --neon-blue: #4D9FFF;
+    --soft-blue: #9DC4FF;
+    --text-primary: #F4F6FA;
+    --text-secondary: #A7B0C8;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  html {
+    scroll-behavior: auto !important;
+  }
+  
+  body {
+    @apply bg-[#07070B] text-white antialiased;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    overflow-x: hidden;
+  }
+  
+  html.lenis, html.lenis body {
+    height: auto;
+  }
+  
+  .lenis.lenis-smooth {
+    scroll-behavior: auto !important;
+  }
+  
+  .lenis.lenis-smooth [data-lenis-prevent] {
+    overscroll-behavior: contain;
+  }
+  
+  .lenis.lenis-stopped {
+    overflow: hidden;
+  }
+  
+  .lenis.lenis-smooth iframe {
+    pointer-events: none;
+  }
+}
+
+/* Typography */
+.font-display {
+  font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+.font-mono-custom {
+  font-family: 'JetBrains Mono', 'SF Mono', 'Monaco', monospace;
+}
+
+/* Text decode effect */
+.decode-text {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #22D3EE 0%, #4D9FFF 50%, #9DC4FF 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Glow effects */
+.glow-cyan {
+  box-shadow: 0 0 20px rgba(34, 211, 238, 0.3),
+              0 0 40px rgba(34, 211, 238, 0.2),
+              0 0 60px rgba(34, 211, 238, 0.1);
+}
+
+.text-glow-cyan {
+  text-shadow: 0 0 10px rgba(34, 211, 238, 0.5),
+               0 0 20px rgba(34, 211, 238, 0.3),
+               0 0 30px rgba(34, 211, 238, 0.2);
+}
+
+/* Glass card effect */
+.glass-card {
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 28px;
+}
+
+.glass-card-hover:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(34, 211, 238, 0.3);
+  transform: translateY(-4px);
+  transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* Navigation pill */
+.nav-pill {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.nav-pill:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(34, 211, 238, 0.3);
+}
+
+/* Video overlay */
+.video-overlay {
+  background: linear-gradient(
+    180deg,
+    rgba(7, 7, 11, 0.3) 0%,
+    rgba(7, 7, 11, 0.6) 50%,
+    rgba(7, 7, 11, 0.9) 100%
+  );
+}
+
+/* Dark overlay */
+.dark-overlay {
+  background: linear-gradient(
+    180deg,
+    rgba(7, 7, 11, 0.35) 0%,
+    rgba(7, 7, 11, 0.75) 100%
+  );
+}
+
+/* Marquee animation */
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 20s linear infinite;
+}
+
+/* Spin animation */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin 4s linear infinite;
+}
+
+/* Pulse glow animation */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(34, 211, 238, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(34, 211, 238, 0.5);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Float animation */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #07070B;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(34, 211, 238, 0.2);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(34, 211, 238, 0.4);
+}
+
+/* Section transitions */
+.section-transition {
+  transition: background-color 0.6s ease-out;
+}
+
+/* Image hover effect */
+.image-hover-scale {
+  transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.image-hover-scale:hover {
+  transform: scale(1.05);
+}
+
+/* Canvas container */
+.canvas-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* Three.js canvas fix */
+canvas {
+  display: block;
+}
+
+/* Speed blur text effect */
+.speed-blur {
+  transition: filter 0.1s ease-out, letter-spacing 0.1s ease-out, transform 0.1s ease-out;
+}
+
+/* Footer grid item */
+.footer-grid-item {
+  transition: transform 0.3s ease, filter 0.3s ease;
+}
+
+.footer-grid-item:hover {
+  transform: scale(1.1);
+  filter: brightness(1.2);
+}
+
+/* Step connector line */
+.step-connector {
+  background: linear-gradient(90deg, rgba(34, 211, 238, 0.3) 0%, rgba(34, 211, 238, 0.8) 50%, rgba(34, 211, 238, 0.3) 100%);
+}
+
+/* Card shine effect */
+.card-shine {
+  position: relative;
+  overflow: hidden;
+}
+
+.card-shine::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  transition: left 0.5s ease;
+}
+
+.card-shine:hover::before {
+  left: 100%;
+}
+
+/* Grain overlay */
+.grain-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0.04;
+  mix-blend-mode: overlay;
+  z-index: 9999;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+}
+
+/* Node grid background */
+.node-grid {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0.04;
+  z-index: 0;
+  background-image: 
+    radial-gradient(circle at 25% 25%, rgba(34, 211, 238, 0.3) 1px, transparent 1px),
+    radial-gradient(circle at 75% 75%, rgba(34, 211, 238, 0.3) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
