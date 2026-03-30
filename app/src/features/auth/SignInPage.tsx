@@ -1,12 +1,10 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff, Mail, Lock, ArrowRight, Disc, Info } from 'lucide-react';
 import { useAuth } from './AuthContext';
-import type { UserRole } from '../../types';
 
 export const SignInPage: React.FC = () => {
-  const navigate = useNavigate();
   const { signIn, isDemoMode } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -20,7 +18,7 @@ export const SignInPage: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const { error: signInError, role } = await signIn(email, password);
+      const { error: signInError } = await signIn(email, password);
       
       if (signInError) {
         setError(signInError.message || 'Invalid email or password');
@@ -28,18 +26,8 @@ export const SignInPage: React.FC = () => {
         return;
       }
 
-      // Redirect based on role
-      const roleDashboardMap: Record<UserRole, string> = {
-        citizen: '/citizen/dashboard',
-        hospital: '/hospital/dashboard',
-        admin: '/admin/dashboard',
-      };
-
-      if (role) {
-        navigate(roleDashboardMap[role]);
-      } else {
-        navigate('/');
-      }
+      // Redirect is handled centrally by <AuthRedirector /> once auth state is ready.
+      setIsLoading(false);
     } catch (err) {
       setError('An unexpected error occurred. Please try again.');
       setIsLoading(false);

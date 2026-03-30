@@ -2,6 +2,7 @@ import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import type { UserRole } from '../../types';
+import { getDashboardPathForRole } from './roleRedirect';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -34,12 +35,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   // Check role permissions
   if (allowedRoles && !allowedRoles.includes(user.role)) {
     // Redirect to appropriate dashboard based on role
-    const roleDashboardMap: Record<UserRole, string> = {
-      citizen: '/citizen/dashboard',
-      hospital: '/hospital/dashboard',
-      admin: '/admin/dashboard',
-    };
-    return <Navigate to={roleDashboardMap[user.role]} replace />;
+    return <Navigate to={getDashboardPathForRole(user.role)} replace />;
   }
 
   return <>{children}</>;

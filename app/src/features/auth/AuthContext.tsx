@@ -59,6 +59,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   const [initError, setInitError] = useState<string | null>(null);
 
+  const normalizeRole = (role: unknown): UserRole => {
+    if (role === 'citizen' || role === 'hospital' || role === 'admin') return role;
+    return 'citizen';
+  };
+
+  const loadProfileFromAuthUser = async (authUser: any): Promise<Profile | null> => {
+    const { data: profile, error: profileError } = await fetchProfile(authUser.id);
+
+    if (!profileError && profile) return profile;
+
+    // If profile doesn't exist yet, create it using auth metadata.
+    const role = normalizeRole(authUser?.user_metadata?.role);
+    const full_name =
+      authUser?.user_metadata?.full_name ??
+      authUser?.user_metadata?.fullName ??
+      '';
+    const email = authUser?.email ?? '';
+
+    if (!email || !full_name) return null;
+
+    const now = new Date().toISOString();
+    const profileData: Profile = {
+      id: authUser.id,
+      email,
+      full_name,
+      role,
+      phone: null,
+      address: null,
+      is_active: true,
+      created_at: now,
+      updated_at: now,
+    };
+
+    const { error: createErr } = await createProfile(profileData);
+    if (createErr) {
+      console.warn('Profile creation during auth bootstrap failed:', createErr.message);
+    }
+
+    const { data: retryProfile } = await fetchProfile(authUser.id);
+    return retryProfile ?? null;
+  };
+
   const refreshUser = async () => {
     try {
       if (isDemoMode) {
@@ -72,27 +114,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (authUser) {
-        const { data: profile, error: profileError } = await fetchProfile(authUser.id);
-        
-        if (profileError) {
-          console.warn('Profile fetch failed during refresh, falling back to demo mode:', profileError.message);
-          // Fall back to demo mode if profile fetch fails
-          const savedDemoUser = localStorage.getItem('demoUser');
-          if (savedDemoUser) {
-            const parsed = JSON.parse(savedDemoUser);
-            setUser(parsed);
-            setSession(true);
-          }
-        } else {
-          setUser(profile);
-          setSession(true);
-        }
-      } else {
+      const { data: { user: authUser }, error: userErr } = await supabase.auth.getUser();
+      if (userErr || !authUser) {
         setUser(null);
         setSession(false);
+        return;
       }
+
+      const profile = await loadProfileFromAuthUser(authUser);
+      setUser(profile);
+      setSession(true);
     } catch (error) {
       console.error('Error refreshing user:', error);
       setInitError('Failed to initialize authentication');
@@ -114,23 +145,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return;
         }
 
-        const { data: { session: initialSession } } = await supabase.auth.getSession();
-        
+        const { data: { session: initialSession }, error: sessionErr } = await supabase.auth.getSession();
+
+        if (sessionErr) {
+          throw sessionErr;
+        }
+
         if (initialSession?.user) {
-          const { data: profile, error: profileError } = await fetchProfile(initialSession.user.id);
-          
-          if (profileError) {
-            console.warn('Profile fetch failed during init, falling back to demo mode:', profileError.message);
-            // Fall back to demo mode if profile fetch fails
-            const savedDemoUser = localStorage.getItem('demoUser');
-            if (savedDemoUser) {
-              setUser(JSON.parse(savedDemoUser));
-              setSession(true);
-            }
-          } else {
-            setUser(profile);
-            setSession(true);
-          }
+          setSession(true);
+          const profile = await loadProfileFromAuthUser(initialSession.user);
+          setUser(profile);
+        } else {
+          setUser(null);
+          setSession(false);
         }
       } catch (error) {
         console.error('Auth initialization error:', error);
@@ -145,23 +172,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!isDemoMode) {
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
         if (event === 'SIGNED_IN' && newSession?.user) {
-          const { data: profile, error: profileError } = await fetchProfile(newSession.user.id);
-          
-          if (profileError) {
-            console.warn('Profile fetch failed in auth state change, falling back to demo mode:', profileError.message);
-            // Fall back to demo mode if profile fetch fails
-            const savedDemoUser = localStorage.getItem('demoUser');
-            if (savedDemoUser) {
-              setUser(JSON.parse(savedDemoUser));
-              setSession(true);
-            }
-          } else {
-            setUser(profile);
-            setSession(true);
-          }
-        } else if (event === 'SIGNED_OUT') {
+          setIsLoading(true);
+          setSession(true);
+          const profile = await loadProfileFromAuthUser(newSession.user);
+          setUser(profile);
+          setIsLoading(false);
+          return;
+        }
+
+        if (event === 'SIGNED_OUT') {
+          setIsLoading(true);
           setUser(null);
           setSession(false);
+          setIsLoading(false);
         }
       });
 
@@ -173,6 +196,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUp = async (email: string, password: string, fullName: string, role: UserRole) => {
     try {
+      setIsLoading(true);
+
       if (isDemoMode) {
         // Create demo user
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -190,6 +215,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem('demoUser', JSON.stringify(demoUser));
         setUser(demoUser);
         setSession(true);
+        setIsLoading(false);
         return { error: null };
       }
 
@@ -205,34 +231,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (error) {
-        // If signups are disabled, fall back to demo mode
-        if (error.message?.includes('Signups not allowed for this instance')) {
-          console.warn('Signups disabled in Supabase, falling back to demo mode');
-          // Create demo user as fallback
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          const demoUser: Profile = {
-            id: `demo-${role}-${Date.now()}`,
-            email,
-            full_name: fullName,
-            role,
-            is_active: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            phone: null,
-            address: null,
-          };
-          localStorage.setItem('demoUser', JSON.stringify(demoUser));
-          setUser(demoUser);
-          setSession(true);
-          return { error: null };
-        }
-        throw error;
+        setIsLoading(false);
+        return { error: error as Error };
       }
 
       if (data.user) {
         const profileData: Profile = {
           id: data.user.id,
-          email,
+          email: data.user.email ?? email,
           full_name: fullName,
           role,
           is_active: true,
@@ -241,19 +247,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           phone: null,
           address: null,
         };
-        
+
+        // Ensure profile row exists; if it already exists, refetch below.
         const { error: profileError } = await createProfile(profileData);
-        if (profileError) throw profileError;
+        if (profileError) {
+          console.warn('createProfile during signup failed:', profileError.message);
+        }
       }
 
+      // After signup, Supabase may or may not have created a session
+      // (e.g. depending on email confirmation settings).
+      const { data: { session: latestSession } } = await supabase.auth.getSession();
+
+      if (latestSession?.user) {
+        setSession(true);
+        const profile = await loadProfileFromAuthUser(latestSession.user);
+        setUser(profile);
+      } else {
+        setSession(false);
+        setUser(null);
+      }
+
+      setIsLoading(false);
       return { error: null };
     } catch (error) {
+      setIsLoading(false);
       return { error: error as Error };
     }
   };
 
   const signIn = async (email: string, password: string) => {
     try {
+      setIsLoading(true);
+
       if (isDemoMode) {
         await new Promise(resolve => setTimeout(resolve, 1000));
         
@@ -270,6 +296,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem('demoUser', JSON.stringify(demoUser));
         setUser(demoUser);
         setSession(true);
+        setIsLoading(false);
         return { error: null, role: demoUser.role };
       }
 
@@ -279,76 +306,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (error) {
-        // If auth is disabled or other auth errors, fall back to demo mode
-        if (error.message?.includes('Invalid login credentials') || 
-            error.message?.includes('Email not confirmed') ||
-            error.message?.includes('Signups not allowed')) {
-          console.warn('Auth error, falling back to demo mode:', error.message);
-          // Fall back to demo mode
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          let demoUser: Profile | null = null;
-          if (email.includes('hospital')) {
-            demoUser = demoProfiles['demo-hospital-1'];
-          } else if (email.includes('admin')) {
-            demoUser = demoProfiles['demo-admin-1'];
-          } else {
-            demoUser = demoProfiles['demo-citizen-1'];
-          }
-          
-          localStorage.setItem('demoUser', JSON.stringify(demoUser));
-          setUser(demoUser);
-          setSession(true);
-          return { error: null, role: demoUser.role };
-        }
-        throw error;
+        setIsLoading(false);
+        return { error: error as Error };
       }
 
       if (data.user) {
-        const { data: profile, error: profileError } = await fetchProfile(data.user.id);
-        
-        // If profile fetch fails (e.g., missing tables), fall back to demo mode
-        if (profileError) {
-          console.warn('Profile fetch failed, falling back to demo mode:', profileError.message);
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          let demoUser: Profile | null = null;
-          if (email.includes('hospital')) {
-            demoUser = demoProfiles['demo-hospital-1'];
-          } else if (email.includes('admin')) {
-            demoUser = demoProfiles['demo-admin-1'];
-          } else {
-            demoUser = demoProfiles['demo-citizen-1'];
-          }
-          
-          localStorage.setItem('demoUser', JSON.stringify(demoUser));
-          setUser(demoUser);
-          setSession(true);
-          return { error: null, role: demoUser.role };
-        }
-        
-        setUser(profile);
         setSession(true);
+
+        const profile = await loadProfileFromAuthUser(data.user);
+        setUser(profile);
+        setIsLoading(false);
         return { error: null, role: profile?.role };
       }
 
+      setSession(false);
+      setUser(null);
+      setIsLoading(false);
       return { error: null };
     } catch (error) {
+      setIsLoading(false);
       return { error: error as Error };
     }
   };
 
   const signOut = async () => {
+    setIsLoading(true);
+
     if (isDemoMode) {
       localStorage.removeItem('demoUser');
       setUser(null);
       setSession(false);
+      setIsLoading(false);
       return;
     }
 
     await supabase.auth.signOut();
     setUser(null);
     setSession(false);
+    setIsLoading(false);
   };
 
   // Show error state if initialization failed

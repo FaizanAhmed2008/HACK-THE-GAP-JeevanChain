@@ -6,7 +6,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import './index.css';
 
 // Auth
-import { AuthProvider, ProtectedRoute, SignInPage, SignUpPage } from './features/auth';
+import { AuthProvider, ProtectedRoute, SignInPage, SignUpPage, AuthRedirector } from './features/auth';
 
 // Dashboards
 import { CitizenDashboard, HospitalDashboard, AdminDashboard } from './features/dashboard';
@@ -154,6 +154,7 @@ function App() {
       <AuthProvider>
         <BrowserRouter>
           <Suspense fallback={<PageLoader />}>
+            <AuthRedirector />
             <Routes>
               {/* Public Routes */}
               <Route path="/" element={<LandingPage />} />

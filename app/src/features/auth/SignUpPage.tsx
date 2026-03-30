@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight, Disc, Info, UserCircle, Building2, Shield } from 'lucide-react';
 import { useAuth } from './AuthContext';
@@ -13,7 +13,6 @@ const roles: { value: UserRole; label: string; icon: LucideIcon; description: st
 ];
 
 export const SignUpPage: React.FC = () => {
-  const navigate = useNavigate();
   const { signUp, isDemoMode } = useAuth();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -49,14 +48,8 @@ export const SignUpPage: React.FC = () => {
         return;
       }
 
-      // Redirect to appropriate dashboard
-      const roleDashboardMap: Record<UserRole, string> = {
-        citizen: '/citizen/dashboard',
-        hospital: '/hospital/dashboard',
-        admin: '/admin/dashboard',
-      };
-
-      navigate(roleDashboardMap[selectedRole]);
+      // Redirect is handled centrally by <AuthRedirector /> once auth state is ready.
+      setIsLoading(false);
     } catch (err) {
       setError('An unexpected error occurred. Please try again.');
       setIsLoading(false);

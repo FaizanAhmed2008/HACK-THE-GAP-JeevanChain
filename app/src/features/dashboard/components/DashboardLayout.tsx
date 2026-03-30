@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Disc, 
@@ -36,7 +36,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   role, 
   navItems 
 }) => {
-  const navigate = useNavigate();
   const location = useLocation();
   const { user, signOut } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -44,7 +43,6 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
   const handleSignOut = async () => {
     await signOut();
-    navigate('/signin');
   };
 
   return (
