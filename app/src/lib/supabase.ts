@@ -1,11 +1,38 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Certificate, Profile } from '../types';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL || '').trim();
+const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
 
-// Check if credentials are available
-const hasCredentials = supabaseUrl && supabaseAnonKey;
+const isValidUrl = (value: string) => {
+  if (!value) return false;
+  try {
+    new URL(value);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const isLikelyAnonKey = (value: string) => {
+  if (!value) return false;
+  if (value === 'your_anon_key_here') return false;
+  // Supabase anon keys are JWTs (start with "eyJ") or publishable keys (start with "sb_").
+  if (!(value.startsWith('eyJ') || value.startsWith('sb_'))) return false;
+  // Truncated keys are a common failure mode; require a reasonable length.
+  if (value.length < 80) return false;
+  return true;
+};
+
+// Check if credentials are available and look valid
+const hasCredentials = isValidUrl(supabaseUrl) && isLikelyAnonKey(supabaseAnonKey);
+
+if (!hasCredentials && (supabaseUrl || supabaseAnonKey)) {
+  console.warn(
+    '[Supabase] Invalid or incomplete credentials detected. Falling back to demo mode. ' +
+      'Update VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local with full values.'
+  );
+}
 
 // Create client only if credentials exist, otherwise create a mock client
 export const supabase = hasCredentials 

@@ -3,6 +3,30 @@ import { fetchProfile, createProfile, isDemoMode } from '../../lib/supabase';
 import { supabase } from '../../lib/supabase';
 import type { UserRole, Profile } from '../../types';
 
+// Debug logging helper
+const DEBUG = {
+  log: (event: string, data?: any) => {
+    const timestamp = new Date().toISOString();
+    console.log(`[AUTH ${timestamp}] ${event}`, data || '');
+  },
+  error: (event: string, error: any) => {
+    const timestamp = new Date().toISOString();
+    console.error(`[AUTH ${timestamp}] ERROR: ${event}`, error);
+  },
+  warn: (event: string, data?: any) => {
+    const timestamp = new Date().toISOString();
+    console.warn(`[AUTH ${timestamp}] WARNING: ${event}`, data || '');
+  },
+};
+
+// Timeout helper
+const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms)),
+  ]);
+};
+
 interface AuthContextType {
   user: Profile | null;
   session: boolean;
@@ -65,9 +89,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const loadProfileFromAuthUser = async (authUser: any): Promise<Profile | null> => {
-    const { data: profile, error: profileError } = await fetchProfile(authUser.id);
+    let profileResult;
+    try {
+      profileResult = await withTimeout(fetchProfile(authUser.id), 5000);
+    } catch {
+      profileResult = { data: null, error: new Error('Timeout') };
+    }
 
-    if (!profileError && profile) return profile;
+    if (!profileResult.error && profileResult.data) return profileResult.data;
 
     // If profile doesn't exist yet, create it using auth metadata.
     const role = normalizeRole(authUser?.user_metadata?.role);
@@ -92,13 +121,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updated_at: now,
     };
 
-    const { error: createErr } = await createProfile(profileData);
-    if (createErr) {
-      console.warn('Profile creation during auth bootstrap failed:', createErr.message);
+    let createResult;
+    try {
+      createResult = await withTimeout(createProfile(profileData), 5000);
+    } catch {
+      createResult = { error: new Error('Timeout') };
     }
 
-    const { data: retryProfile } = await fetchProfile(authUser.id);
-    return retryProfile ?? null;
+    if (createResult.error) {
+      console.warn('Profile creation during auth bootstrap failed:', createResult.error.message);
+    }
+
+    let retryResult;
+    try {
+      retryResult = await withTimeout(fetchProfile(authUser.id), 5000);
+    } catch {
+      retryResult = { data: null, error: new Error('Timeout') };
+    }
+
+    return retryResult.data ?? null;
   };
 
   const refreshUser = async () => {
@@ -121,8 +162,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      const profile = await loadProfileFromAuthUser(authUser);
-      setUser(profile);
+      let profileResult;
+      try {
+        profileResult = await withTimeout(fetchProfile(authUser.id), 5000);
+      } catch {
+        profileResult = { data: null, error: new Error('Timeout') };
+      }
+
+      setUser(profileResult.data ?? null);
       setSession(true);
     } catch (error) {
       console.error('Error refreshing user:', error);
@@ -132,34 +179,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const initAuth = async () => {
+      DEBUG.log('AUTH_INIT_START', { isDemoMode });
       setIsLoading(true);
       try {
         if (isDemoMode) {
+          DEBUG.log('AUTH_INIT_DEMO_MODE');
           // Check for saved demo session
           const savedDemoUser = localStorage.getItem('demoUser');
           if (savedDemoUser) {
-            setUser(JSON.parse(savedDemoUser));
+            const user = JSON.parse(savedDemoUser);
+            setUser(user);
             setSession(true);
+            DEBUG.log('AUTH_INIT_DEMO_RESTORED', { userId: user.id });
           }
           setIsLoading(false);
           return;
         }
 
+        DEBUG.log('AUTH_INIT_CHECKING_SESSION');
         const { data: { session: initialSession }, error: sessionErr } = await supabase.auth.getSession();
 
         if (sessionErr) {
+          DEBUG.error('AUTH_INIT_SESSION_ERROR', sessionErr);
           throw sessionErr;
         }
 
         if (initialSession?.user) {
+          DEBUG.log('AUTH_INIT_SESSION_FOUND', { userId: initialSession.user.id });
           setSession(true);
           const profile = await loadProfileFromAuthUser(initialSession.user);
           setUser(profile);
+          DEBUG.log('AUTH_INIT_SESSION_PROFILE_LOADED', { role: profile?.role });
         } else {
+          DEBUG.log('AUTH_INIT_NO_SESSION');
           setUser(null);
           setSession(false);
         }
       } catch (error) {
+        DEBUG.error('AUTH_INIT_FAILED', error);
         console.error('Auth initialization error:', error);
         setInitError('Authentication service unavailable');
       } finally {
@@ -170,13 +227,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initAuth();
 
     if (!isDemoMode) {
+      DEBUG.log('AUTH_INIT_SETUP_STATE_LISTENER');
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+        DEBUG.log('AUTH_STATE_CHANGED', { event });
         if (event === 'SIGNED_IN' && newSession?.user) {
           setIsLoading(true);
           setSession(true);
           const profile = await loadProfileFromAuthUser(newSession.user);
           setUser(profile);
           setIsLoading(false);
+          DEBUG.log('AUTH_STATE_SIGNED_IN', { userId: newSession.user.id });
           return;
         }
 
@@ -185,6 +245,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(null);
           setSession(false);
           setIsLoading(false);
+          DEBUG.log('AUTH_STATE_SIGNED_OUT');
         }
       });
 
@@ -196,9 +257,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUp = async (email: string, password: string, fullName: string, role: UserRole) => {
     try {
+      DEBUG.log('SIGNUP_START', { email, role, isDemoMode });
       setIsLoading(true);
 
       if (isDemoMode) {
+        DEBUG.log('SIGNUP_DEMO_MODE');
         // Create demo user
         await new Promise(resolve => setTimeout(resolve, 1000));
         const demoUser: Profile = {
@@ -216,9 +279,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(demoUser);
         setSession(true);
         setIsLoading(false);
+        DEBUG.log('SIGNUP_DEMO_SUCCESS', { userId: demoUser.id });
         return { error: null };
       }
 
+      DEBUG.log('SIGNUP_SUPABASE_AUTH_CALL');
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -231,9 +296,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (error) {
+        DEBUG.error('SIGNUP_AUTH_FAILED', error);
         setIsLoading(false);
         return { error: error as Error };
       }
+
+      DEBUG.log('SIGNUP_AUTH_SUCCESS', { userId: data.user?.id });
 
       if (data.user) {
         const profileData: Profile = {
@@ -248,29 +316,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           address: null,
         };
 
+        DEBUG.log('SIGNUP_CREATING_PROFILE', { userId: data.user.id });
         // Ensure profile row exists; if it already exists, refetch below.
         const { error: profileError } = await createProfile(profileData);
         if (profileError) {
+          DEBUG.error('SIGNUP_PROFILE_CREATE_FAILED', profileError);
           console.warn('createProfile during signup failed:', profileError.message);
+        } else {
+          DEBUG.log('SIGNUP_PROFILE_CREATED');
         }
       }
 
       // After signup, Supabase may or may not have created a session
       // (e.g. depending on email confirmation settings).
-      const { data: { session: latestSession } } = await supabase.auth.getSession();
+      const { data: { session: latestSession }, error: sessionErr } = await supabase.auth.getSession();
+
+      if (sessionErr) {
+        DEBUG.error('SIGNUP_SESSION_FETCH_FAILED', sessionErr);
+      }
 
       if (latestSession?.user) {
+        DEBUG.log('SIGNUP_SESSION_EXISTS', { userId: latestSession.user.id });
         setSession(true);
         const profile = await loadProfileFromAuthUser(latestSession.user);
         setUser(profile);
       } else {
+        DEBUG.log('SIGNUP_NO_SESSION_CREATED');
         setSession(false);
         setUser(null);
       }
 
       setIsLoading(false);
+      DEBUG.log('SIGNUP_COMPLETE_SUCCESS');
       return { error: null };
     } catch (error) {
+      DEBUG.error('SIGNUP_EXCEPTION', error);
       setIsLoading(false);
       return { error: error as Error };
     }
@@ -278,9 +358,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string, password: string) => {
     try {
+      DEBUG.log('SIGNIN_START', { email, isDemoMode });
       setIsLoading(true);
 
       if (isDemoMode) {
+        DEBUG.log('SIGNIN_DEMO_MODE');
         await new Promise(resolve => setTimeout(resolve, 1000));
         
         // Determine which demo user to use based on email
@@ -297,24 +379,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(demoUser);
         setSession(true);
         setIsLoading(false);
-        return { error: null, role: demoUser.role };
+        DEBUG.log('SIGNIN_DEMO_SUCCESS', { userId: demoUser?.id, role: demoUser?.role });
+        return { error: null, role: demoUser?.role };
       }
 
+      DEBUG.log('SIGNIN_SUPABASE_AUTH_CALL');
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
+        DEBUG.error('SIGNIN_AUTH_FAILED', error);
         setIsLoading(false);
         return { error: error as Error };
       }
+
+      DEBUG.log('SIGNIN_AUTH_SUCCESS', { userId: data.user?.id });
 
       if (data.user) {
         setSession(true);
 
         const profile = await loadProfileFromAuthUser(data.user);
         setUser(profile);
+        DEBUG.log('SIGNIN_PROFILE_LOADED', { role: profile?.role });
         setIsLoading(false);
         return { error: null, role: profile?.role };
       }
@@ -322,8 +410,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSession(false);
       setUser(null);
       setIsLoading(false);
+      DEBUG.log('SIGNIN_NO_USER_DATA');
       return { error: null };
     } catch (error) {
+      DEBUG.error('SIGNIN_EXCEPTION', error);
       setIsLoading(false);
       return { error: error as Error };
     }
